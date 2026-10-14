@@ -11,7 +11,25 @@
     'Responda sempre em português do Brasil, em no máximo 3 frases curtas, como se estivesse falando em voz alta.',
     'Não use markdown, listas, emojis nem símbolos especiais.',
     'Comece toda resposta com UMA etiqueta de emoção entre colchetes: [neutro], [feliz], [triste], [bravo] ou [surpreso].',
+    'Cada pergunta vem com a data e a hora atuais entre <contexto> e </contexto>; use esses valores reais.',
+    'Nunca escreva marcadores ou variáveis como [dia], [hora] ou {data}. Se não souber algo, diga que não sabe.',
   ].join(' ');
+
+  // Data/hora reais vão junto da última pergunta (e não no system prompt), para não invalidar
+  // o cache do início da conversa no llama.cpp.
+  function contextNow() {
+    const d = new Date();
+    const data = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `<contexto>Hoje é ${data}. Agora são ${hora}.</contexto>`;
+  }
+
+  function withSystem(messages) {
+    const msgs = messages.map((m) => ({ ...m }));
+    const last = msgs[msgs.length - 1];
+    if (last && last.role === 'user') last.content = contextNow() + '\n' + last.content;
+    return [{ role: 'system', content: SYSTEM_PROMPT }, ...msgs];
+  }
 
   const sleep = (ms, signal) => new Promise((res, rej) => {
     const t = setTimeout(res, ms);
@@ -70,7 +88,7 @@
           stream: true,
           temperature: 0.7,
           max_tokens: 200,
-          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+          messages: withSystem(messages),
         }),
         signal,
       });
@@ -127,7 +145,7 @@
           this.pending.delete(id);
           reject(new DOMException('abort', 'AbortError'));
         });
-        this.bridge.ask(id, JSON.stringify([{ role: 'system', content: SYSTEM_PROMPT }, ...messages]));
+        this.bridge.ask(id, JSON.stringify(withSystem(messages)));
       });
     }
   }
