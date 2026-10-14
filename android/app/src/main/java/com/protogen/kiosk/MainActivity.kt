@@ -177,6 +177,32 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         Kiosk.enter(this)
+        muteNotifications(true)
+    }
+
+    override fun onPause() {
+        muteNotifications(false)
+        super.onPause()
+    }
+
+    /**
+     * O reconhecedor do Google toca um bipe pelo canal de notificação a cada sessão,
+     * e a escuta contínua reinicia a cada poucos segundos. Com o app na tela, esse canal fica mudo.
+     * A voz do Protogen sai pelo canal de mídia e não é afetada.
+     */
+    private var mutedByUs = false
+    private fun muteNotifications(mute: Boolean) {
+        val am = getSystemService(android.media.AudioManager::class.java)
+        val stream = android.media.AudioManager.STREAM_NOTIFICATION
+        runCatching {
+            if (mute && !am.isStreamMute(stream)) {
+                am.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_MUTE, 0)
+                mutedByUs = true
+            } else if (!mute && mutedByUs) {
+                am.adjustStreamVolume(stream, android.media.AudioManager.ADJUST_UNMUTE, 0)
+                mutedByUs = false
+            }
+        }.onFailure { android.util.Log.w("Main", "não deu para silenciar notificações: ${it.message}") }
     }
 
     override fun onDestroy() {
