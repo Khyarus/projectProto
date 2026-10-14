@@ -17,18 +17,29 @@
 
   // Data/hora reais vão junto da última pergunta (e não no system prompt), para não invalidar
   // o cache do início da conversa no llama.cpp.
-  function contextNow() {
+  function contextNow(opts) {
     const d = new Date();
     const data = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    return `<contexto>Hoje é ${data}. Agora são ${hora}.</contexto>`;
+    const parts = [`Hoje é ${data}. Agora são ${hora}.`];
+    if (opts.profile && opts.profile.local) parts.push(`O usuário mora em ${opts.profile.local}.`);
+    if (opts.context) parts.push('Informações buscadas na internet agora (use para responder, resumindo):\n' + opts.context);
+    return `<contexto>${parts.join('\n')}</contexto>`;
   }
 
-  function withSystem(messages) {
+  // Memória (fatos que o usuário pediu para lembrar) vai no system prompt: muda pouco,
+  // então o cache do llama.cpp continua valendo entre as perguntas.
+  function systemPrompt(profile) {
+    const mem = (profile && profile.memory) || [];
+    if (!mem.length) return SYSTEM_PROMPT;
+    return SYSTEM_PROMPT + '\nFatos sobre o usuário que você deve lembrar:\n' + mem.map((f) => '- ' + f).join('\n');
+  }
+
+  function withSystem(messages, opts = {}) {
     const msgs = messages.map((m) => ({ ...m }));
     const last = msgs[msgs.length - 1];
-    if (last && last.role === 'user') last.content = contextNow() + '\n' + last.content;
-    return [{ role: 'system', content: SYSTEM_PROMPT }, ...msgs];
+    if (last && last.role === 'user') last.content = contextNow(opts) + '\n' + last.content;
+    return [{ role: 'system', content: systemPrompt(opts.profile) }, ...msgs];
   }
 
   const sleep = (ms, signal) => new Promise((res, rej) => {
@@ -79,7 +90,7 @@
     constructor(url, model) { this.url = url.replace(/\/+$/, ''); this.model = model || 'local'; }
     get label() { return 'LLM · ' + this.url.replace(/^https?:\/\//, ''); }
 
-    async ask(messages, { onToken, signal } = {}) {
+    async ask(messages, { onToken, signal, context, profile } = {}) {
       const res = await fetch(this.url + '/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +99,7 @@
           stream: true,
           temperature: 0.7,
           max_tokens: 200,
-          messages: withSystem(messages),
+          messages: withSystem(messages, { context, profile }),
         }),
         signal,
       });
@@ -136,7 +147,7 @@
     }
     get label() { return 'LLM · ' + (this.bridge.modelName ? this.bridge.modelName() : 'LOCAL'); }
 
-    ask(messages, { onToken, onTool, signal } = {}) {
+    ask(messages, { onToken, onTool, signal, context, profile } = {}) {
       const id = ++this.seq;
       return new Promise((resolve, reject) => {
         this.pending.set(id, { resolve, reject, onToken, onTool, full: '' });
@@ -145,7 +156,7 @@
           this.pending.delete(id);
           reject(new DOMException('abort', 'AbortError'));
         });
-        this.bridge.ask(id, JSON.stringify(withSystem(messages)));
+        this.bridge.ask(id, JSON.stringify(withSystem(messages, { context, profile })));
       });
     }
   }

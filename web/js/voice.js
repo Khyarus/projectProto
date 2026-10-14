@@ -12,6 +12,18 @@
     grave: { speed: 82,  pitch: 72, throat: 110, mouth: 105 },
   };
 
+  // Palavras muito comuns de cada idioma, para decidir a pronúncia de cada frase
+  const EN = new Set('the is are was and you your of to it this that what with for have i my me can do not be on at in how why'.split(' '));
+  const PT = new Set('o a os as de do da que é não você um uma para com em no na por eu meu se mas como isso está'.split(' '));
+  function isEnglish(text) {
+    let en = 0, pt = 0;
+    for (const w of text.toLowerCase().match(/[a-zà-ÿ']+/g) || []) {
+      if (EN.has(w)) en++;
+      if (PT.has(w)) pt++;
+    }
+    return en > pt;
+  }
+
   class Voice {
     constructor() {
       this.preset = 'sam';
@@ -49,10 +61,19 @@
       if (this.ctx.state === 'suspended') this.ctx.resume();
     }
 
-    // Enfileira texto em português. Pode ser chamado várias vezes (streaming).
+    // Enfileira texto (português ou inglês). Pode ser chamado várias vezes (streaming).
+    // Português passa pelo conversor ptsam; inglês usa o conversor original do próprio SAM.
     say(text) {
       if (this.muted || !text || !text.trim()) return;
-      for (const chunk of root.PtSam.toSam(text)) this.queue.push(chunk);
+      if (isEnglish(text)) {
+        const clean = text.replace(/[^A-Za-z0-9\s.,!?'-]/g, ' ');
+        for (const part of clean.match(/[^.!?]+[.!?]*/g) || []) {
+          // o SAM aceita ~250 fonemas por vez: quebra frases longas
+          for (const piece of part.match(/.{1,110}(\s|$)/g) || []) if (piece.trim()) this.queue.push({ text: piece.trim(), english: true });
+        }
+      } else {
+        for (const chunk of root.PtSam.toSam(text)) this.queue.push({ text: chunk, english: false });
+      }
       if (!this.playing) this.next();
     }
 
@@ -88,9 +109,9 @@
         return;
       }
       this.unlock();
-      const phon = this.queue.shift();
-      const buf = this.sam.buf32(phon, true);
-      if (!buf) { console.warn('[voz] SAM rejeitou:', phon); this.next(); return; }
+      const item = this.queue.shift();
+      const buf = item.english ? this.sam.buf32(item.text) : this.sam.buf32(item.text, true);
+      if (!buf) { console.warn('[voz] SAM rejeitou:', item.text); this.next(); return; }
 
       const ab = this.ctx.createBuffer(1, buf.length, 22050);
       ab.getChannelData(0).set(buf);

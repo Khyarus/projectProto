@@ -23,6 +23,19 @@
   let greeted = false;
   let wakeReady = false;  // a escuta contínua só começa depois de tudo montado
 
+  // Perfil do usuário: cidade e fatos para lembrar (/local, /lembrar)
+  const profile = { local: '', memory: [] };
+  try {
+    profile.local = localStorage.getItem('protogen.local') || '';
+    profile.memory = JSON.parse(localStorage.getItem('protogen.memory') || '[]');
+  } catch (e) { /* sem storage */ }
+  function saveProfile() {
+    try {
+      localStorage.setItem('protogen.local', profile.local);
+      localStorage.setItem('protogen.memory', JSON.stringify(profile.memory));
+    } catch (e) { /* sem storage */ }
+  }
+
   // ---------- estado ----------
   function setState(s) {
     state = s;
@@ -107,6 +120,18 @@
     setState('thinking');
     streaming = true;
 
+    // busca na internet antes, se a pergunta pedir (clima, notícias, pesquisa)
+    let context = '';
+    if (Agent.available()) {
+      for (const step of Agent.plan(text, profile)) {
+        line.textContent = '[' + step.label + ']';
+        try { context += (await Agent.run(step)) + '\n'; }
+        catch (e) { context += `(falha ao buscar ${step.label}: ${e.message})\n`; }
+        if (myAbort.signal.aborted) return;
+      }
+      line.textContent = '';
+    }
+
     let raw = '';         // texto bruto (com etiqueta)
     let spoken = 0;       // quantos caracteres do texto limpo já foram para a voz
     let clean = '';
@@ -128,6 +153,8 @@
     try {
       const full = await brain.ask(history.slice(), {
         signal: myAbort.signal,
+        context: context.trim(),
+        profile,
         onTool: (desc) => { line.textContent = '[' + desc + ']'; },
         onToken: (tok) => {
           raw += tok;
@@ -165,6 +192,7 @@
     '/voz [' + Voice.presets().join('|') + ']',
     '/mudo', '/falar <texto>', '/emocao [' + EYE_EMOTIONS.join('|') + ']',
     '/estado [idle|listening|thinking|talking|error]', '/llm <url> | /llm mock', '/limpar',
+    '/local <cidade>', '/lembrar <fato>', '/memoria', '/esquecer <n|tudo>',
     '/escuta [celular|vosk|off|debug]', '/olhar [on|off|inverter]',
     '/modelos', '/baixar <id>', '/usar <id>', '/apagar <id>',
     '/versao', '/atualizar', '/sair <pin>', '/liberar <pin>',
@@ -227,6 +255,24 @@
         } catch (e) { /* sem storage */ }
         applyFace();
         systemLine('olhar: ' + (faceOn ? 'seguindo rosto' : 'desligado') + (faceInvert ? ' (invertido)' : ''));
+        break;
+      case 'local':
+        if (arg) { profile.local = arg; saveProfile(); }
+        systemLine(profile.local ? 'cidade: ' + profile.local : 'cidade não definida. /local <cidade>');
+        break;
+      case 'lembrar':
+        if (!arg) { systemLine('/lembrar <fato>, ex.: /lembrar meu nome é João'); break; }
+        profile.memory.push(arg); saveProfile();
+        systemLine('vou lembrar: ' + arg);
+        break;
+      case 'memoria': case 'memória':
+        systemLine(profile.memory.length ? profile.memory.map((f, i) => (i + 1) + '. ' + f).join('\n') : 'memória vazia. /lembrar <fato>');
+        break;
+      case 'esquecer':
+        if (arg === 'tudo') profile.memory = [];
+        else if (+arg >= 1 && +arg <= profile.memory.length) profile.memory.splice(+arg - 1, 1);
+        else { systemLine('/esquecer <número> ou /esquecer tudo'); break; }
+        saveProfile(); systemLine('esquecido');
         break;
       case 'modelos': listModels(); break;
       case 'baixar': if (native) native.downloadModel(arg); else systemLine('só no app'); break;

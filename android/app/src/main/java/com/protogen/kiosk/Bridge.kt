@@ -59,6 +59,19 @@ class Bridge(private val act: MainActivity) {
         return true
     }
 
+    // ---------- ferramentas de internet ----------
+    @JavascriptInterface
+    fun tool(id: Int, name: String, arg: String) {
+        kotlin.concurrent.thread(name = "tool-$name") {
+            val r = runCatching { Tools.run(name, arg) }
+            act.emit(
+                "protogenTool",
+                JSONObject().put("id", id).put("ok", r.isSuccess)
+                    .put("text", r.getOrElse { it.message ?: "erro" })
+            )
+        }
+    }
+
     // ---------- cérebro (llama.cpp) ----------
     @JavascriptInterface
     fun hasBrain(): Boolean = Llm.loadedPath != null
