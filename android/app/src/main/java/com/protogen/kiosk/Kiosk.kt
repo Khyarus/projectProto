@@ -51,10 +51,9 @@ object Kiosk {
                 (BatteryManager.BATTERY_PLUGGED_AC or BatteryManager.BATTERY_PLUGGED_USB or
                     BatteryManager.BATTERY_PLUGGED_WIRELESS).toString()
             )
-            dpm.setPermissionGrantState(
-                admin, act.packageName, Manifest.permission.RECORD_AUDIO,
-                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
-            )
+            for (perm in listOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)) {
+                dpm.setPermissionGrantState(admin, act.packageName, perm, DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED)
+            }
 
             val am = act.getSystemService(ActivityManager::class.java)
             if (am.lockTaskModeState == ActivityManager.LOCK_TASK_MODE_NONE) act.startLockTask()

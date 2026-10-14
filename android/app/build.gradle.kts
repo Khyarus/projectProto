@@ -23,6 +23,8 @@ android {
         versionName = appVersion
         buildConfigField("String", "UPDATE_REPO", "\"${findProperty("protogen.updateRepo") ?: ""}\"")
         buildConfigField("String", "KIOSK_PIN", "\"$kioskPin\"")
+        // Celular (arm64) e emulador (x86_64); evita carregar libs nativas de outras arquiteturas
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     signingConfigs {
@@ -71,4 +73,13 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Palavra de ativação offline
+    implementation("com.alphacephei:vosk-android:0.3.47@aar")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+
+    // Câmera frontal + detecção de rosto no aparelho
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("com.google.mlkit:face-detection:16.1.7")
 }

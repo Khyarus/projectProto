@@ -24,8 +24,7 @@ class Ears(private val act: Activity, private val emit: (JSONObject) -> Unit) : 
         this.lang = lang
         retried = false
         if (act.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            act.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1)
-            fail("sem permissão de microfone")
+            fail("sem permissão de microfone") // o pedido de permissão é feito na abertura do app
             return
         }
         if (!SpeechRecognizer.isRecognitionAvailable(act)) {

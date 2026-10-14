@@ -21,11 +21,13 @@
   let fadeTimer = null;
   let emoTimer = null;
   let greeted = false;
+  let wakeReady = false;  // a escuta contínua só começa depois de tudo montado
 
   // ---------- estado ----------
   function setState(s) {
     state = s;
     eyes.setState(s);
+    if (wakeReady) { if (s === 'idle') armWake(); else if (s !== 'listening') disarmVosk(); }
     hudState.textContent = 'SYS · ' + {
       idle: 'IDLE', listening: 'OUVINDO', thinking: 'PENSANDO', talking: 'FALANDO', error: 'ERRO',
     }[s];
@@ -163,6 +165,8 @@
     '/voz [' + Voice.presets().join('|') + ']',
     '/mudo', '/falar <texto>', '/emocao [' + EYE_EMOTIONS.join('|') + ']',
     '/estado [idle|listening|thinking|talking|error]', '/llm <url> | /llm mock', '/limpar',
+    '/escuta [celular|vosk|off|debug]', '/olhar [on|off|inverter]',
+    '/modelos', '/baixar <id>', '/usar <id>', '/apagar <id>',
     '/versao', '/atualizar', '/sair <pin>', '/liberar <pin>',
   ].join('   ');
   const native = window.ProtogenNative || null;
@@ -204,6 +208,36 @@
         if (!native) systemLine('só no app');
         else systemLine(native.releaseOwner(arg) ? 'app não é mais dono do aparelho' : 'pin errado');
         break;
+      case 'escuta':
+        if (arg === 'debug') {
+          debugWake = !debugWake;
+          if (native && native.wakeDebug) native.wakeDebug(debugWake);
+          systemLine('depuração da escuta: ' + (debugWake ? 'ligada' : 'desligada'));
+        } else if (['celular', 'vosk', 'off'].includes(arg)) {
+          if (arg === 'vosk' && !(native && native.voskReady())) systemLine('vosk ainda não instalado/carregado (/modelos)');
+          setWakeMode(arg); systemLine('escuta: ' + arg);
+        } else systemLine('escuta: ' + wakeMode + '  ·  opções: celular, vosk, off, debug');
+        break;
+      case 'olhar':
+        if (arg === 'inverter') faceInvert = !faceInvert;
+        else if (arg === 'on' || arg === 'off') faceOn = arg === 'on';
+        try {
+          localStorage.setItem('protogen.face', faceOn ? 'on' : 'off');
+          localStorage.setItem('protogen.faceInvert', faceInvert ? '1' : '0');
+        } catch (e) { /* sem storage */ }
+        applyFace();
+        systemLine('olhar: ' + (faceOn ? 'seguindo rosto' : 'desligado') + (faceInvert ? ' (invertido)' : ''));
+        break;
+      case 'modelos': listModels(); break;
+      case 'baixar': if (native) native.downloadModel(arg); else systemLine('só no app'); break;
+      case 'usar':
+        if (!native) systemLine('só no app');
+        else systemLine(native.selectModel(arg) ? 'modelo selecionado: ' + arg : 'modelo inválido: ' + arg);
+        break;
+      case 'apagar':
+        if (!native) systemLine('só no app');
+        else systemLine(native.deleteModel(arg) ? 'apagado: ' + arg : 'não deu para apagar: ' + arg);
+        break;
       default: systemLine('comando desconhecido. /ajuda');
     }
   }
@@ -230,40 +264,189 @@
   // ---------- microfone ----------
   if (!ears.supported) mic.classList.add('unsupported');
 
-  function toggleMic() {
+  // Sessão do reconhecedor: 'passive' = escutando a palavra de ativação em segundo plano,
+  // 'active' = ouvindo um pedido (olhos atentos).
+  let session = null;
+  let woke = false;       // a palavra de ativação apareceu nesta sessão passiva
+  let heard = '';
+
+  function startActive() {
     if (!ears.supported) { systemLine('reconhecimento de voz indisponível neste navegador'); return; }
-    if (ears.active) { ears.stop(); return; }
     if (abort) abort.abort();
     voice.stop();
-    ears.start();
+    disarmVosk();
+    session = 'active';
+    if (!ears.active) ears.start();
     mic.classList.add('on');
     setState('listening');
     setEmotion('neutro');
+  }
+
+  function toggleMic() {
+    if (session === 'active' && ears.active) { ears.stop(); return; }
+    if (session === 'passive' && ears.active) {
+      // já está ouvindo em segundo plano: só promove a sessão
+      session = 'active'; woke = true;
+      mic.classList.add('on'); setState('listening');
+      return;
+    }
+    startActive();
   }
   mic.addEventListener('click', toggleMic);
   // tocar no visor também ativa o microfone (modo quiosque, sem teclado)
   $('visor').addEventListener('click', toggleMic);
 
-  let heard = '';
-  ears.onpartial = (t) => { input.value = t; };
+  ears.onpartial = (t) => {
+    if (session === 'passive') {
+      const m = Wake.match(t);
+      if (m && !woke) { woke = true; wakeAck(); }
+      if (woke) input.value = m ? m.rest : t;
+      return;
+    }
+    input.value = Wake.strip(t);
+  };
   ears.onfinal = (t) => { heard = t; };
   ears.onlevel = (v) => { if (state === 'listening') eyes.setLevel(v); };
-  ears.onerror = (e) => { if (e !== 'no-speech' && e !== 'aborted') systemLine('microfone: ' + e); };
+  ears.onerror = (e) => {
+    if (session === 'passive') { Wake.noteError(e); return; }
+    if (e !== 'no-speech' && e !== 'aborted') systemLine('microfone: ' + e);
+  };
   ears.onend = () => {
     mic.classList.remove('on');
     input.value = '';
     const t = heard; heard = '';
-    if (t) converse(t);
+    const was = session; session = null;
+    if (was === 'passive') {
+      const m = Wake.match(t);
+      if (debugWake && t) systemLine('ouvi: "' + t + '"' + (m ? '  -> ativou' : ''));
+      if (m || woke) {
+        woke = false;
+        if (m && m.rest) converse(m.rest);
+        else startActive(); // só chamou o nome: agora ouve o pedido
+        return;
+      }
+      Wake.sessionEnded(!!t);
+      armWake();
+      return;
+    }
+    woke = false;
+    const cmd = Wake.strip(t);
+    if (cmd) converse(cmd);
     else { setState('idle'); maybeIdle(); }
   };
 
-  // mensagens do app Android (atualização etc.)
-  window.protogenSys = (ev) => { if (ev && ev.text) systemLine(ev.text); };
+  // ---------- palavra de ativação: "ei proto" / "hey proto" ----------
+  // modo 'celular': reconhecedor do Android/Chrome em loop (entende frase inteira, PT e EN)
+  // modo 'vosk': reconhecedor offline só da palavra (app Android)
+  const Wake = {
+    // "hey" costuma sair como "ei"/"rei"; "proto" às vezes vira "prato", "preto", "porto"...
+    RE: /(?:^|[\s,.!?])(?:(?:h?ei|hey|rei|oi|ai|hi|e)[\s,]+(?:proto|prot[oóô]|protu|prato|preto|porto|photo|pluto)|proto)(?=$|[\s,.!?])[\s,.!?]*/i,
+    errors: 0,
+    match(t) {
+      if (!t) return null;
+      const m = t.match(this.RE);
+      return m ? { rest: t.slice(m.index + m[0].length).trim() } : null;
+    },
+    strip(t) { const m = this.match(t); return m ? m.rest || '' : (t || '').trim(); },
+    noteError(e) {
+      if (['no-speech', 'aborted', 'reconhecedor ocupado'].includes(e)) return;
+      this.errors++;
+      if (this.errors === 3) systemLine('escuta contínua com problema: ' + e);
+    },
+    sessionEnded(ok) { if (ok) this.errors = 0; },
+  };
+
+  let wakeMode = 'celular';
+  let debugWake = false;
+  let armTimer = null;
+  try { wakeMode = localStorage.getItem('protogen.wake') || 'celular'; } catch (e) { /* sem storage */ }
+
+  function canListen() {
+    return wakeMode !== 'off' && state === 'idle' && !voice.busy && !streaming && session === null && !document.hidden;
+  }
+
+  function armWake() {
+    clearTimeout(armTimer);
+    // reinício rápido demais irrita o reconhecedor; com erros seguidos, espera mais
+    const delay = Math.min(8000, 400 + Wake.errors * 1500);
+    armTimer = setTimeout(() => {
+      if (!canListen()) return;
+      if (wakeMode === 'vosk') {
+        if (native && native.voskReady()) native.voskListen(true);
+        return;
+      }
+      if (!ears.supported) return;
+      session = 'passive'; woke = false;
+      ears.start();
+    }, delay);
+  }
+
+  function disarmVosk() { if (native && native.voskListen) native.voskListen(false); }
+
+  // ouviu o nome: olhos atentos + bipe
+  function wakeAck() {
+    disarmVosk();
+    mic.classList.add('on');
+    setState('listening');
+    setEmotion('surpreso', 1500);
+    voice.beep();
+  }
+
+  window.protogenWake = (ev) => {
+    if (!ev) return;
+    if (ev.type === 'debug') { if (debugWake) systemLine(ev.text); return; }
+    if (ev.type === 'wake') { wakeAck(); startActive(); }
+  };
+
+  function setWakeMode(m) {
+    wakeMode = m;
+    try { localStorage.setItem('protogen.wake', m); } catch (e) { /* sem storage */ }
+    disarmVosk();
+    if (session === 'passive') ears.stop();
+    armWake();
+  }
+
+  // ---------- olhar seguindo o rosto (câmera frontal) ----------
+  let faceOn = true, faceInvert = false;
+  try {
+    faceOn = localStorage.getItem('protogen.face') !== 'off';
+    faceInvert = localStorage.getItem('protogen.faceInvert') === '1';
+  } catch (e) { /* sem storage */ }
+  window.protogenFace = (ev) => {
+    if (!ev || ev.lost) { eyes.clearGaze(); return; }
+    eyes.setGaze(faceInvert ? -ev.x : ev.x, ev.y, ev.size);
+  };
+  function applyFace() { if (native && native.faceTracking) native.faceTracking(faceOn); if (!faceOn) eyes.clearGaze(); }
+
+  // ---------- modelos ----------
+  function fmtSize(b) { return b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB'; }
+  function listModels() {
+    if (!native) { systemLine('só no app'); return; }
+    const ms = JSON.parse(native.models());
+    systemLine(ms.map((m) => {
+      const flag = m.installed ? '[ok]' : m.downloading ? '[baixando]' : m.partial ? '[parcial]' : '[ ]';
+      return `${flag} ${m.id}${m.selected ? ' *' : ''}  ${fmtSize(m.size)}  ${m.notes || ''}`;
+    }).join('\n') + '\n* = selecionado · /baixar <id> · /usar <id> · /apagar <id>');
+  }
+
+  // mensagens do app Android (atualização, downloads, permissões)
+  window.protogenSys = (ev) => {
+    if (!ev) return;
+    if (ev.type === 'permissions') { applyFace(); armWake(); }
+    if (ev.text) systemLine(ev.text);
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (session === 'passive') ears.stop(); disarmVosk(); }
+    else armWake();
+  });
 
   // ---------- início ----------
   // No app o áudio não precisa de toque para liberar
   if (native) unlockAudio();
+  wakeReady = true;
   setState('idle');
   refreshHud();
-  systemLine('toque no visor para falar  ·  /ajuda');
+  applyFace();
+  systemLine(wakeMode === 'off' ? 'toque no visor para falar  ·  /ajuda' : 'diga "ei proto" ou toque no visor  ·  /ajuda');
 })();

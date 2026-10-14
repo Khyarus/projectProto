@@ -54,6 +54,8 @@
       this.nextSaccade = rand(1, 3);
       this.t = 0;
       this.boot = 0;         // animação de ligar
+      this.gaze = null;      // rosto seguido pela câmera
+      this.noticeT = -1;     // >=0 logo após notar alguém
 
       this.resize();
       this.last = performance.now();
@@ -64,6 +66,13 @@
     setEmotion(e) { if (EMOTIONS[e]) this.emotion = e; }
     setLevel(v) { this.level = clamp(v || 0, 0, 1); }
     setWave(w) { this.wave = w; }
+
+    // Rosto visto pela câmera: x,y em -1..1. Os olhos seguem enquanto chegar atualização.
+    setGaze(x, y, size) {
+      if (!this.gaze) this.noticeT = 0; // acabou de ver alguém: arregala rapidinho
+      this.gaze = { x, y, size: size || 0, t: this.t };
+    }
+    clearGaze() { this.gaze = null; }
 
     resize() {
       const dpr = Math.min(root.devicePixelRatio || 1, 3);
@@ -140,13 +149,18 @@
 
       // olhar
       this.nextSaccade -= dt;
+      const following = this.gaze && this.t - this.gaze.t < 1.5;
+      if (this.gaze && !following) this.gaze = null;
       if (this.state === 'thinking') {
         this.lookTarget = { x: 0.10, y: -0.10 };
+      } else if (following) {
+        this.lookTarget = { x: clamp(this.gaze.x, -1, 1) * 0.13, y: clamp(this.gaze.y, -1, 1) * 0.08 };
+        this.nextSaccade = rand(1.5, 3);
       } else if (this.nextSaccade <= 0) {
         this.nextSaccade = rand(1.2, 4);
         this.lookTarget = Math.random() < 0.4 ? { x: 0, y: 0 } : { x: rand(-0.07, 0.07), y: rand(-0.04, 0.04) };
       }
-      const lk = 1 - Math.pow(0.00001, dt);
+      const lk = 1 - Math.pow(following ? 0.000001 : 0.00001, dt);
       this.look.x = lerp(this.look.x, this.lookTarget.x, lk);
       this.look.y = lerp(this.look.y, this.lookTarget.y, lk);
 
@@ -155,6 +169,11 @@
       if (this.state === 'thinking') open = 0.42;
       else if (this.state === 'listening') open = 1.08 + Math.sin(this.t * 3) * 0.04;
       else if (this.state === 'talking') open = 0.82 + this.level * 0.45;
+      if (this.noticeT >= 0) {
+        this.noticeT += dt;
+        open *= 1 + 0.18 * Math.max(0, 1 - this.noticeT / 0.6);
+        if (this.noticeT > 0.6) this.noticeT = -1;
+      }
       this.open = lerp(this.open, open, 1 - Math.pow(0.0001, dt));
       this.openNow = Math.max(0.06, this.open * blink * smoothstep(0, 0.6, this.boot));
     }

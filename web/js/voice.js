@@ -63,6 +63,25 @@
 
     get busy() { return this.playing || this.queue.length > 0; }
 
+    // Bipe curto de "estou ouvindo" (dois tons de onda quadrada, estilo 8 bits)
+    beep() {
+      if (this.muted) return;
+      this.unlock();
+      const t = this.ctx.currentTime;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      g.connect(this.ctx.destination);
+      const o = this.ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(880, t);
+      o.frequency.setValueAtTime(1320, t + 0.07);
+      o.connect(g);
+      o.start(t);
+      o.stop(t + 0.2);
+    }
+
     next() {
       if (!this.queue.length) {
         if (this.playing) { this.playing = false; this.onend && this.onend(); }

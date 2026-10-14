@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "llm_default": "qwen2.5-3b",
+  "wake_default": "vosk-pt",
+  "models": [
+    {
+      "id": "vosk-pt",
+      "kind": "wake",
+      "name": "Vosk PT pequeno (palavra de ativação)",
+      "url": "https://alphacephei.com/vosk/models/vosk-model-small-pt-0.3.zip",
+      "size": 32453112,
+      "file": "vosk-model-small-pt-0.3.zip",
+      "unzip": "vosk-model-small-pt-0.3",
+      "notes": "Escuta \"ei proto\" offline, sem bipe."
+    },
+    {
+      "id": "qwen2.5-3b",
+      "kind": "llm",
+      "name": "Qwen 2.5 3B Instruct Q4_K_M",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+      "size": 2104932768,
+      "file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+      "notes": "Bom português. Padrão."
+    },
+    {
+      "id": "qwen2.5-1.5b",
+      "kind": "llm",
+      "name": "Qwen 2.5 1.5B Instruct Q4_K_M",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "size": 1117320736,
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "notes": "Rápido, respostas mais simples."
+    },
+    {
+      "id": "llama3.2-3b",
+      "kind": "llm",
+      "name": "Llama 3.2 3B Instruct Q4_K_M",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "size": 2019377696,
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "id": "llama3.2-1b",
+      "kind": "llm",
+      "name": "Llama 3.2 1B Instruct Q4_K_M",
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "size": 807694464,
+      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "notes": "O mais rápido."
+    },
+    {
+      "id": "qwen3-4b",
+      "kind": "llm",
+      "name": "Qwen3 4B Q4_K_M",
+      "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+      "size": 2497280256,
+      "file": "Qwen3-4B-Q4_K_M.gguf",
+      "notes": "Mais esperto, mais lento."
+    },
+    {
+      "id": "gemma3-4b",
+      "kind": "llm",
+      "name": "Gemma 3 4B IT Q4_K_M",
+      "url": "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+      "size": 2489894016,
+      "file": "gemma-3-4b-it-Q4_K_M.gguf"
+    }
+  ]
+}

@@ -62,6 +62,7 @@ html, body {
   justify-content: flex-end;
 }
 #subtitle.fade { opacity: 0; }
+#subtitle > div { white-space: pre-line; }
 #subtitle .user { color: var(--led-faint); }
 #subtitle .user::before { content: "> "; }
 
