@@ -1,0 +1,115 @@
+:root {
+  --led: #19f0ff;
+  --led-dim: rgba(25, 240, 255, 0.45);
+  --led-faint: rgba(25, 240, 255, 0.14);
+  --bg: #000;
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", "Roboto Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--led);
+  font-family: var(--mono);
+  overflow: hidden;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#visor {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--led-dim);
+  pointer-events: none;
+  text-transform: uppercase;
+}
+
+#subtitle {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  max-height: 30vh;
+  overflow: hidden;
+  font-size: clamp(13px, 2.2vmin, 18px);
+  line-height: 1.45;
+  color: var(--led-dim);
+  text-align: center;
+  text-shadow: 0 0 8px var(--led-faint);
+  pointer-events: none;
+  transition: opacity 1.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+#subtitle.fade { opacity: 0; }
+#subtitle .user { color: var(--led-faint); }
+#subtitle .user::before { content: "> "; }
+
+#cli {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid var(--led-faint);
+  opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+#cli:focus-within, #cli:hover { opacity: 1; }
+
+.prompt { color: var(--led); font-weight: bold; }
+
+#cli-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--led);
+  font: inherit;
+  font-size: 16px; /* evita zoom no Android */
+  caret-color: var(--led);
+}
+#cli-input::placeholder { color: var(--led-faint); }
+
+#mic {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--led-faint);
+  background: transparent;
+  color: var(--led-dim);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+#mic.on {
+  color: #000;
+  background: var(--led);
+  border-color: var(--led);
+  box-shadow: 0 0 18px var(--led);
+}
+#mic.unsupported { opacity: 0.25; }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Olhos do visor: área segura do ícone adaptativo é o círculo central de 66dp -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#19F0FF"
+        android:pathData="M30,44 L48,47 L49,57 L46,63 L34,63 L30,57 Z" />
+    <path
+        android:fillColor="#19F0FF"
+        android:pathData="M78,44 L60,47 L59,57 L62,63 L74,63 L78,57 Z" />
+    <path
+        android:strokeColor="#19F0FF"
+        android:strokeWidth="2.5"
+        android:strokeLineJoin="round"
+        android:pathData="M40,72 L44,75 L48,72 L52,75 L56,72 L60,75 L64,72 L68,75" />
+</vector>

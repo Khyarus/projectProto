@@ -1,0 +1,20 @@
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+
+# Chaves NUNCA vão para o repositório
+*.jks
+*.keystore
+
+# Modelos de IA (grandes demais; o app baixa sozinho)
+*.gguf
+
+# Diversos
+*.wav
+node_modules/
+.DS_Store
+Thumbs.db
