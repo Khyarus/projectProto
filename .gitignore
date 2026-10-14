@@ -18,3 +18,6 @@ android/.idea/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Build nativo (CMake)
+android/app/.cxx/

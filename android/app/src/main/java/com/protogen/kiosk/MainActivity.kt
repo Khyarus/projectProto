@@ -105,6 +105,18 @@ class MainActivity : ComponentActivity() {
                 if (models.isUnmetered()) downloadModel(llm.id)
                 else sys("models", "modelo ${llm.name} não instalado. Use /baixar ${llm.id} no Wi-Fi.")
             }
+            loadBrain()
+        }
+    }
+
+    /** Carrega o LLM selecionado (se instalado) e avisa a interface. */
+    fun loadBrain() {
+        val m = models.installedLlm() ?: return
+        if (Llm.loadedPath == models.path(m).absolutePath || Llm.loading) return
+        sys("brain", "carregando cérebro ${m.id}...")
+        Llm.load(models.path(m)) { err ->
+            if (err == null) sys("brain", "cérebro ${m.id} online")
+            else sys("brain", "falha ao carregar ${m.id}: $err")
         }
     }
 
@@ -125,6 +137,7 @@ class MainActivity : ComponentActivity() {
             }.onSuccess {
                 sys("download", "${m.name} instalado")
                 if (m.kind == "wake") wake.load(models.path(m))
+                if (m.kind == "llm" && m.id == models.selectedLlm) loadBrain()
             }.onFailure {
                 sys("download", "falha ao baixar ${m.id}: ${it.message}")
             }

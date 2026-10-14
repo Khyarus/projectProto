@@ -14,6 +14,7 @@ val kioskPin = (findProperty("protogen.kioskPin") as String?) ?: "1982"
 android {
     namespace = "com.protogen.kiosk"
     compileSdk = 35
+    ndkVersion = "29.0.13113456"
 
     defaultConfig {
         applicationId = "com.protogen.kiosk"
@@ -25,6 +26,21 @@ android {
         buildConfigField("String", "KIOSK_PIN", "\"$kioskPin\"")
         // Celular (arm64) e emulador (x86_64); evita carregar libs nativas de outras arquiteturas
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        externalNativeBuild {
+            cmake {
+                // llama.cpp sempre otimizado, inclusive no build de debug (senão fica ~10x mais lento)
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
+                cFlags += listOf("-O3")
+                cppFlags += listOf("-O3")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.31.6"
+        }
     }
 
     signingConfigs {

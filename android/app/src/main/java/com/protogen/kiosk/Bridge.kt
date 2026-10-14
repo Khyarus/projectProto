@@ -47,6 +47,7 @@ class Bridge(private val act: MainActivity) {
         val m = act.models.get(id) ?: return false
         if (m.kind != "llm") return false
         act.models.selectedLlm = id
+        act.runOnUiThread { act.loadBrain() }
         return true
     }
 
@@ -58,20 +59,22 @@ class Bridge(private val act: MainActivity) {
         return true
     }
 
-    // ---------- cérebro (llama.cpp entra na próxima etapa) ----------
+    // ---------- cérebro (llama.cpp) ----------
     @JavascriptInterface
-    fun hasBrain(): Boolean = false
+    fun hasBrain(): Boolean = Llm.loadedPath != null
 
     @JavascriptInterface
     fun ask(id: Int, messagesJson: String) {
-        act.emit("protogenBrain", JSONObject().put("id", id).put("type", "error").put("text", "sem modelo local"))
+        fun ev(type: String, text: String? = null) =
+            act.emit("protogenBrain", JSONObject().put("id", id).put("type", type).apply { if (text != null) put("text", text) })
+        Llm.generate(messagesJson, onToken = { ev("token", it) }, done = { err -> if (err == null) ev("done") else ev("error", err) })
     }
 
     @JavascriptInterface
-    fun cancel(id: Int) {}
+    fun cancel(id: Int) = Llm.cancel()
 
     @JavascriptInterface
-    fun modelName(): String = act.models.installedLlm()?.name ?: "nenhum"
+    fun modelName(): String = act.models.installedLlm()?.id ?: "nenhum"
 
     // ---------- sistema ----------
     @JavascriptInterface

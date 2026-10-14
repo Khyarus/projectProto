@@ -433,6 +433,7 @@
   window.protogenSys = (ev) => {
     if (!ev) return;
     if (ev.type === 'permissions') { applyFace(); armWake(); }
+    if (ev.type === 'brain') { brain = Brain.createBrain(); refreshHud(); }
     if (ev.text) systemLine(ev.text);
   };
 
