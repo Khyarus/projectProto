@@ -35,6 +35,8 @@ class FaceTracker(
     )
     private var provider: ProcessCameraProvider? = null
     private var lastRun = 0L
+    private var detectRot: Int? = null
+    private var misses = 0
     private var seen = false
     var running = false
         private set
@@ -51,7 +53,7 @@ class FaceTracker(
                 val analysis = ImageAnalysis.Builder()
                     .setResolutionSelector(
                         ResolutionSelector.Builder()
-                            .setResolutionStrategy(ResolutionStrategy(Size(480, 360), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER))
+                            .setResolutionStrategy(ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
                             .build()
                     )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -79,26 +81,49 @@ class FaceTracker(
         val media = proxy.image
         if (media == null || now - lastRun < 100) { proxy.close(); return }
         lastRun = now
-        val rot = proxy.imageInfo.rotationDegrees
-        // Depois de girar, a imagem fica "em pé" como a tela
-        val w = if (rot == 90 || rot == 270) proxy.height else proxy.width
-        val h = if (rot == 90 || rot == 270) proxy.width else proxy.height
-        detector.process(InputImage.fromMediaImage(media, rot))
+        // Rotação que deixa a imagem alinhada com a TELA (o Android calcula pela orientação da tela)
+        val screenRot = proxy.imageInfo.rotationDegrees
+        // Rotação que deixa o ROSTO em pé. Pode ser diferente: com a rotação automática desligada,
+        // o celular deitado continua com a tela em retrato. Testamos as 4 até achar um rosto.
+        val tryRot = detectRot ?: screenRot
+        detector.process(InputImage.fromMediaImage(media, tryRot))
             .addOnSuccessListener { faces ->
                 val f = faces.maxByOrNull { it.boundingBox.width() * it.boundingBox.height() }
                 if (f == null) {
-                    if (seen) { seen = false; onLost() }
-                } else {
-                    seen = true
-                    val b = f.boundingBox
-                    // A câmera frontal não espelha a imagem de análise: o lado esquerdo da imagem
-                    // é o lado esquerdo da tela. x/y em -1..1.
-                    val x = (b.exactCenterX() / w) * 2 - 1
-                    val y = (b.exactCenterY() / h) * 2 - 1
-                    onFace(x.toDouble(), y.toDouble(), (b.width().toDouble() / w).coerceIn(0.0, 1.0))
+                    misses++
+                    if (misses >= 4) {
+                        // sem rosto há um tempo: tenta a próxima rotação
+                        misses = 0
+                        detectRot = (tryRot + 90) % 360
+                    }
+                    if (seen && misses == 0) { seen = false; onLost() }
+                    return@addOnSuccessListener
                 }
+                misses = 0
+                if (detectRot != tryRot) Log.i(TAG, "rosto encontrado com rotação $tryRot (tela: $screenRot)")
+                detectRot = tryRot
+                seen = true
+
+                // centro do rosto no quadro girado por tryRot, normalizado 0..1
+                val (dw, dh) = rotatedSize(proxy.width, proxy.height, tryRot)
+                val b = f.boundingBox
+                val (u, v) = rotate(b.exactCenterX() / dw, b.exactCenterY() / dh, (360 - tryRot) % 360) // volta ao sensor
+                val (sx, sy) = rotate(u, v, screenRot) // e leva para a orientação da tela
+                // A câmera frontal não espelha a imagem de análise: lado esquerdo da imagem = lado esquerdo da tela.
+                onFace(sx * 2.0 - 1, sy * 2.0 - 1, (b.width().toDouble() / dw).coerceIn(0.0, 1.0))
             }
             .addOnCompleteListener { proxy.close() }
+    }
+
+    private fun rotatedSize(w: Int, h: Int, rot: Int) =
+        if (rot == 90 || rot == 270) h.toFloat() to w.toFloat() else w.toFloat() to h.toFloat()
+
+    /** Gira um ponto normalizado (u,v) em `rot` graus no sentido horário. */
+    private fun rotate(u: Float, v: Float, rot: Int): Pair<Float, Float> = when (rot) {
+        90 -> (1 - v) to u
+        180 -> (1 - u) to (1 - v)
+        270 -> v to (1 - u)
+        else -> u to v
     }
 
     fun destroy() {
